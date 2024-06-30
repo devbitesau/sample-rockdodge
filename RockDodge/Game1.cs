@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using RockDodge.Engine;
+using RockDodge.Engine.Particle;
 
 namespace RockDodge;
 
@@ -19,7 +20,7 @@ public class Game1 : Game
     private Sprite _cursor;
     private SpriteFont _spriteFont;
 
-    private double _difficultyTimer = 5;
+    private double _difficultyTimer = 1;
     private int _difficulty = 1;
 
     private Vector2 _paralaxRef = Vector2.Zero;
@@ -29,6 +30,10 @@ public class Game1 : Game
     private List<Sprite> _props;
 
     private List<Sprite> _falling;
+
+    private ParticleManager _particleManager = new ();
+    private Texture2D _dustTexture;
+    private MouseEmitter _mouseEmitter = new();
 
     public Game1()
     {
@@ -60,7 +65,18 @@ public class Game1 : Game
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
 
+        _dustTexture = Content.Load<Texture2D>("Dust Particle");
         _spriteFont = Content.Load<SpriteFont>("BaseFont");
+
+        ParticleEmitterData ped = new(_dustTexture)
+        {
+            interval = 0.01f,
+            emitCount = 100,
+            angleVariance = 180f
+        };
+
+        ParticleEmitter pe = new(_mouseEmitter, ped,_particleManager);
+        _particleManager.AddParticleEmitter(pe);
 
         var tileMapJson = File.ReadAllText("Content/map.json") ;
         Texture2D tileMapTexture = Content.Load<Texture2D>("Terrain");
@@ -153,10 +169,14 @@ public class Game1 : Game
         Animation spikeBallAnimation = new Animation(spikeBallAtlas, false, 1);
         ISpriteAction spikeBallRotateAction = new RotateAction(160.0f);
         ISpriteAction spikeFallingAction = new FallingAction();
+        ISpriteAction spikeBreakAction = new BreakCollideAction();
         Random r = new Random();
-        Sprite spikeBall = new Sprite(spikeBallAnimation, new Vector2(-20,r.Next(0,350)), SpriteOrigin.Center);
+        Sprite spikeBall = new Sprite(spikeBallAnimation, new Vector2(r.Next(20,310),0), SpriteOrigin.Center);
         spikeBall.AddAction("spin",spikeBallRotateAction);
         spikeBall.AddAction("falling",spikeFallingAction);
+        spikeBall.AddAction("impact",spikeBreakAction);
+        spikeBall.AddStaticCollisions(_tileCollisions);
+
         return spikeBall;
     }
 
@@ -166,6 +186,11 @@ public class Game1 : Game
             Keyboard.GetState().IsKeyDown(Keys.Escape))
             Exit();
 
+        if (Mouse.GetState().LeftButton == ButtonState.Pressed)
+        {
+            _particleManager.AddParticle(new (Mouse.GetState().Position.ToVector2(), new ParticleData(_dustTexture)));
+        }
+
         _player.Update(gameTime);
         _cursor.Update(gameTime);
 
@@ -173,7 +198,7 @@ public class Game1 : Game
         if (_difficultyTimer <= 0)
         {
             _difficulty++;
-            _difficultyTimer = 10;
+            _difficultyTimer = 10 / (_difficulty/2f);
             _falling.Add(MakeSpikeBall(ref _difficulty));
         }
 
@@ -187,6 +212,9 @@ public class Game1 : Game
             falling.Update(gameTime);
         }
 
+        _falling.RemoveAll(x => x.IsMarkedForDestroy());
+
+        _particleManager.Update(gameTime);
         base.Update(gameTime);
     }
 
@@ -207,10 +235,6 @@ public class Game1 : Game
         }
         _tilemap.Draw(_spriteBatch);
 
-
-
-
-
         _player.Draw(_spriteBatch);
 
         _cursor.Draw(_spriteBatch);
@@ -219,6 +243,8 @@ public class Game1 : Game
         _spriteBatch.DrawString(_spriteFont, $"FPS: {fps}", new Vector2(32+16, 32+16), Color.White);
         _spriteBatch.DrawString(_spriteFont,$"Time: {gameTime.TotalGameTime.TotalSeconds:f2}", new Vector2(65, 560), Color.White);
         _spriteBatch.DrawString(_spriteFont,$"Difficulty: {_difficulty}", new Vector2(200, 560), Color.White);
+
+        _particleManager.Draw(_spriteBatch, gameTime);
         _spriteBatch.End();
 
         base.Draw(gameTime);

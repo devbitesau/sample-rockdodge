@@ -16,6 +16,11 @@ public class Sprite
 
     private readonly Dictionary<string, ISpriteAction> _actions;
 
+    private bool _markedForDestroy = false;
+
+    public void MarkDestroy(bool destroy) => _markedForDestroy = destroy;
+    public bool IsMarkedForDestroy() => _markedForDestroy;
+
     public Sprite(Animation defaultAnimation, Vector2 startPosition, SpriteOrigin origin = SpriteOrigin.TopLeft)
     {
         _actions = new Dictionary<string, ISpriteAction>();
